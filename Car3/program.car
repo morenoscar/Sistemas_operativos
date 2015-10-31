@@ -1,0 +1,5 @@
+color 255,0,255,255
+run_forward 300
+turn_right 250
+move_back 100
+turn_left 340

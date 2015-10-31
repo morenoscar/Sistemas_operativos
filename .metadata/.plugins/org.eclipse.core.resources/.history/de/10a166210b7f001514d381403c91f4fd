@@ -1,0 +1,572 @@
+grammar Car;
+
+options {
+	language = Java;
+}
+
+@header {
+
+package co.edu.javeriana.interpreter.antlr;
+
+  import co.edu.javeriana.car.*;
+
+  import co.edu.javeriana.interpreter.*;
+  import co.edu.javeriana.interpreter.context.*;
+  import co.edu.javeriana.interpreter.antlr.evaluator.*;
+
+
+
+
+
+  import java.util.HashMap;
+
+}
+
+@parser::members {
+
+Context contexto = new Context();
+boolean bandera = true;
+public HashMap<String, Evaluator> funciones = new HashMap<String,Evaluator>();
+private Car car;
+
+
+  public CarParser(Car car, TokenStream input) {
+
+    this(input);
+
+    this.car = car;
+
+  }
+
+}
+
+// La primera regla gramatical representa la estructura del programa completo
+
+/*program: 
+
+comando+
+
+;*/
+
+/*
+
+=========================================================
+
+SIMBOLO INICIAL Y PARTES INICIALES DEL PROGRAMA
+
+=========================================================
+
+*/
+program returns [Evaluator e]
+:
+{
+  	Secuencia sequence= new Secuencia(); 
+  	  }
+
+	(statement
+		{ sequence.add($statement.e);	}
+	)+ 
+	
+	{ 
+	
+	sequence.evaluate(new Context());
+	}	
+	
+;
+
+statement returns [Evaluator e]
+:
+	 println
+	{$e = $println.e ;}
+
+	| move //{$e = $move.e} 
+
+	| ifstatement
+	| whilestatement 
+;
+
+block returns [Evaluator e]
+:
+	'{' statement+ '}'
+;
+
+/*
+
+=========================================================
+
+                        CONDICIONAL
+
+=========================================================
+
+*/
+ifstatement returns [Evaluator e]
+:
+/*IF '(' rel = expression {  $e = new IfEvaluator ();
+  	 					((IfEvaluator) $e).agregarCondicion($rel.e); }
+	')' SEMICOLON*/
+	IF '(' expression ')'
+	(
+		block
+		| statement
+	)
+	(
+		ELSE
+		(
+			ifstatement
+			| block
+		)
+	)?
+;
+
+/*
+
+=========================================================
+
+                        CICLOS
+
+=========================================================
+
+*/
+
+
+whilestatement returns [Evaluator e] 
+   :
+   WHILE '(' expression ')'
+   
+     block 
+   
+	 ;
+
+/*
+ 
+=========================================================
+
+                        ARITMÉTICA
+
+=========================================================
+
+*/
+expression returns [Evaluator e]
+:
+	op1 = add
+	{   $e=$op1.e; }
+
+	(
+		'=' op2 = add
+		{   $e=$op2.e;  }
+
+		| '!=' op2 = add
+		{   $e=new DiferenteEvaluator($e,$op2.e);   }
+
+		| '==' op2 = add
+		{   $e=new IgualIgualEvaluator($e,$op2.e);  }
+
+		| '<' op2 = add
+		{   $e=new MenorEvaluator($e,$op2.e);       }
+
+		| '<=' op2 = add
+		{ $e=new MenorIgualEvaluator($e,$op2.e);    }
+
+		| '>=' op2 = add
+		{   $e=new MayorIgualEvaluator($e,$op2.e);  }
+
+		| '>' op2 = add
+		{   $e=new MayorEvaluator($e,$op2.e);       }
+
+	)*
+;
+
+add returns [Evaluator e]
+:
+	op1 = mult
+	{  $e = $op1.e;  }
+
+	(
+		'-' op2 = mult
+		{ $e = new MinusEvaluator($e,$op2.e);  }
+
+		| '+' op2 = mult
+		{  $e = new PlusEvaluator($e,$op2.e);  }
+
+	)*
+	// {System.out.println((Integer)$op2.e);}
+
+;
+
+mult returns [Evaluator e]
+:
+	op1 = unary
+	{  $e = $op1.e; }
+
+	(
+		'*' op2 = unary
+		{  $e = new TimesEvaluator ($e, $op2.e); }
+
+		| '/' op2 = unary
+		{ $e= new DivideEvaluator($e,$op2.e);  }
+
+		| '%' op2 = unary
+		{ $e = new ModEvaluator($e, $op2.e);   }
+
+	)* 
+;
+
+unary returns [Evaluator e]
+:
+	{   boolean positive = true ; }
+
+	(
+		'+'
+		| '-'
+		{positive=false;}
+ 
+	)* term
+	{      $e = $term.e;
+
+                                      if (!positive)
+
+                                      {
+
+                                        $e= new NegationEvaluator($e);
+
+                                      }
+
+      }
+
+;
+
+term returns [Evaluator e]
+:
+	IDENT
+	{  $e = new IntEvaluator(0.0); }
+
+	| '(' expression
+	{ $e = $expression.e; }
+
+	')'
+	| INTEGER
+	{ $e = new IntEvaluator (Double.parseDouble($INTEGER.getText())); }
+
+;
+
+
+logico returns [Evaluator e] 
+  :
+    op1=expression { $e = $op1.e; }
+  (
+    '&&' op2=expression { $e = new AndEvaluator($e,$op2.e); }
+   | '||' op2=expression {  $e = new OrEvaluator($e,$op2.e); }
+  )*
+  ;
+
+/*
+
+=========================================================
+
+                        IMPRESIÓN
+
+=========================================================
+
+*/
+println returns [Evaluator e]
+:
+	{$e = new Println();}
+
+	PRINTLN
+	(
+		rel = expression
+		{ ((Println)$e).addEvaluator($rel.e); }
+
+	)
+	(
+		',' exp = expression
+		{ ((Println)$e).addEvaluator($exp.e); }
+
+	)*
+;
+
+/*
+
+=========================================================
+
+                        CARRO
+
+=========================================================
+
+*/
+  
+color returns [Evaluator e]:
+COLOR 
+	a=expression COMMA
+	b=expression COMMA
+	c=expression COMMA
+	d=expression 
+{$e = new Color (car,$a.e,$b.e,$c.e,$d.e);}
+;
+move returns [Evaluator e]
+:
+
+
+	(
+		RUN_BACKWARD op2 = expression
+		{$e= new Run_backward($e,car);}
+
+		| RUN_FORWARD op2 = expression
+		{$e= new Run_forward($e,car);}
+
+		| TURN_LEFT op2 = expression
+		{$e= new Turn_left($e,car);}
+
+		| TURN_RIGHT op2 = expression
+		{$e= new Turn_right($e,car);}
+
+	)
+;
+/*
+declaracion returns [Evaluator e] throws Exception
+  :
+  VARIABLE nom = NOMBRE 
+        {  if(bandera)
+            $e = new DeclaracionEvaluator($nom.text, new DoubleEvaluator(0)); }
+  (   IDENT ev = evaluator     
+        { if(bandera)
+          { ((DeclaracionEvaluator)$e).asignar($ev.e); } }
+  )?
+  SEMICOLON
+;
+
+*/
+
+/*
+
+=========================================================
+
+                        TOKENS
+
+=========================================================
+
+*/
+PLUS
+:
+	'+'
+;
+
+MINUS
+:
+	'-'
+;
+
+FUNCTION
+:
+	'function'
+;
+
+PRINTLN
+:
+	'println'
+;
+
+TURN_LEFT
+:
+	'turn_left'
+;
+
+TURN_RIGHT
+:
+	'turn_right'
+;
+
+COLOR
+:
+	'color'
+;
+
+RUN_FORWARD
+:
+	'run_forward'
+;
+
+RUN_BACKWARD
+:
+	'run_backward'
+;
+
+MOVEROTATE
+:
+	'moveRotate'
+;
+
+WHILE
+:
+	'while'
+;
+
+DECLARE
+:
+	'declare'
+;
+
+IF
+:
+	'if'
+;
+
+ELSE
+:
+	'else'
+;
+
+FOR
+:
+	'for'
+;
+
+PARLEFT
+:
+	'('
+;
+
+PARRIGHT
+:
+	')'
+;
+
+CORLEFT
+:
+	'{'
+;
+
+CORRIGHT
+:
+	'}'
+;
+
+COMMA
+:
+	','
+;
+
+SEMICOLON
+:
+	';'
+;
+
+PUNTO
+:
+	'.'
+;
+
+MAYOR
+:
+	'>'
+;
+
+MENOR
+:
+	'<'
+;
+
+IGUAL
+:
+	'='
+;
+
+DIFERENTE
+:
+	'!='
+;
+
+MAYOR_IGUAL
+:
+	'>='
+;
+
+MENOR_IGUAL
+:
+	'<='
+;
+
+AND
+:
+	'&&'
+;
+
+OR
+:
+	'||'
+;
+
+UNDERSCORE
+:
+	'_'
+;
+
+VARIABLE
+:
+	(
+		'a' .. 'z'
+		| 'A' .. 'Z'
+	)
+;
+
+NOMBRE
+:
+	(
+		(
+			'a' .. 'z'
+			| 'A' .. 'Z'
+			| '_'
+		)
+		(
+			(
+				'a' .. 'z'
+				| 'A' .. 'Z'
+				| '_'
+			)
+			|
+			(
+				'1' .. '9'
+			)
+		)*
+	)
+;
+
+INTEGER
+:
+	(
+		'0' .. '9'
+	)+
+	'.'?
+	(
+		'0' .. '9'
+	)+
+;
+
+WORD
+:
+	'"' ~( '"' )* '"'
+; //Arreglar
+
+IDENT
+:
+	(
+		'a' .. 'z'
+		| 'A' .. 'Z'
+	)
+	(
+		'a' .. 'z'
+		| 'A' .. 'Z'
+		| '0' .. '9'
+	)*
+;
+
+WS
+:
+	(
+		' '
+		| '\n'
+		| '\t'
+		| '\r'
+	) -> skip
+;
+

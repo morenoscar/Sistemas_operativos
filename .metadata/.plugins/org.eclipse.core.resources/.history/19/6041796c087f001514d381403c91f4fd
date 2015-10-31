@@ -1,0 +1,22 @@
+package co.edu.javeriana.interpreter.antlr.evaluator;
+
+import co.edu.javeriana.interpreter.context.Context;
+
+public class IntEvaluator implements Evaluator {
+	Double value;
+	
+	
+	public IntEvaluator(Double value){
+		this.value= value;
+	}
+	
+	public String toTreeString (String ident)
+	{
+		return '\n' + ident + "Int: "  + value;
+	}
+
+	@Override
+	public Object evaluate(Context pila) {
+		return value ; 
+	}
+}
